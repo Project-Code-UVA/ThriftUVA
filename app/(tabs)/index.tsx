@@ -1,3 +1,4 @@
+import { Link } from "expo-router";
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 export default function Index() {
@@ -44,16 +45,13 @@ export default function Index() {
       {/* Row of items */}
       <View style={styles.sectionRow}>
         {Array.from({ length: 3 }).map((_, i) => (
-          <View key={i} style={styles.item}>
-            {/* Rectangle placeholder */}
-            <View style={styles.placeholder} />
-
-            {/* Item title */}
-            <Text style={styles.itemTitle}>Item {i + 1}</Text>
-
-            {/* Item price */}
-            <Text style={styles.itemPrice}>$0.00</Text>
-          </View>
+          <Link key={i} href="./product_detail" asChild>
+            <TouchableOpacity style={styles.item} activeOpacity={0.8}>
+              <View style={styles.placeholder} />
+              <Text style={styles.itemTitle}>Item {i + 1}</Text>
+              <Text style={styles.itemPrice}>$0.00</Text>
+            </TouchableOpacity>
+          </Link>
         ))}
       </View>
 
