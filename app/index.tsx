@@ -7,7 +7,7 @@ export default function Index() {
   const pathname = usePathname();
 
   const goTab = (href: Route) => {
-    if (pathname !== href) router.replace(href); // tab behavior
+    if (pathname !== href) router.replace(href);
   };
 
   return (
@@ -19,9 +19,11 @@ export default function Index() {
           style={styles.search}
           placeholder="Search…"
           placeholderTextColor="#888"
+          autoCapitalize="none"
+          autoCorrect={false}
         />
         <TouchableOpacity style={styles.filterButton} activeOpacity={0.8}>
-          <Text style={{ color: "#888", fontWeight: "bold" }}>+</Text>
+          <Text style={styles.filterButtonText}>+</Text>
         </TouchableOpacity>
       </View>
 
@@ -59,30 +61,39 @@ export default function Index() {
 
       {/* Custom tabs */}
       <View style={styles.bottomNav}>
-        <TouchableOpacity activeOpacity={0.8} onPress={() => goTab("/")}>
+        <TouchableOpacity style={styles.navSlot} activeOpacity={0.8} onPress={() => goTab("/")}>
           <Text style={[styles.navItem, pathname === "/" && styles.navItemActive]}>
             Home
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity activeOpacity={0.8} onPress={() => goTab("/search")}>
-          <Text
-            style={[
-              styles.navItem,
-              pathname === "/search" && styles.navItemActive,
-            ]}
-          >
+        <TouchableOpacity
+          style={styles.navSlot}
+          activeOpacity={0.8}
+          onPress={() => goTab("/search")}
+        >
+          <Text style={[styles.navItem, pathname === "/search" && styles.navItemActive]}>
             Search
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity activeOpacity={0.8} onPress={() => goTab("/sell")}>
+        <TouchableOpacity style={styles.plusButton} activeOpacity={0.9}>
+          <Text style={styles.plusButtonText}>
+            +
+            </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.navSlot} activeOpacity={0.8} onPress={() => goTab("/sell")}>
           <Text style={[styles.navItem, pathname === "/sell" && styles.navItemActive]}>
             Sell
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity activeOpacity={0.8} onPress={() => goTab("/profile")}>
+        <TouchableOpacity
+          style={styles.navSlot}
+          activeOpacity={0.8}
+          onPress={() => goTab("/profile")}
+        >
           <Text style={[styles.navItem, pathname === "/profile" && styles.navItemActive]}>
             Profile
           </Text>
@@ -94,17 +105,17 @@ export default function Index() {
 
 const styles = StyleSheet.create({
   container: {
-    paddingTop: 40,
-    paddingHorizontal: 20,
     flex: 1,
     backgroundColor: "#fff",
+    paddingTop: 40,
+    paddingHorizontal: 20,
   },
   logo: {
     fontSize: 45,
     textAlign: "center",
     marginTop: 20,
-    fontWeight: "bold",
     marginBottom: 10,
+    fontWeight: "bold",
   },
   row: {
     flexDirection: "row",
@@ -114,13 +125,13 @@ const styles = StyleSheet.create({
     marginBottom: 60,
   },
   search: {
+    width: "70%",
     backgroundColor: "#f2f2f2",
     paddingVertical: 12,
     paddingHorizontal: 15,
     borderRadius: 10,
     fontSize: 16,
     textAlign: "center",
-    width: "70%",
   },
   filterButton: {
     width: 42,
@@ -129,6 +140,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#f2f2f2",
     justifyContent: "center",
     alignItems: "center",
+  },
+  filterButtonText: {
+    color: "#888",
+    fontWeight: "bold",
+    fontSize: 18,
   },
   sectionTitle: {
     fontSize: 20,
@@ -165,8 +181,8 @@ const styles = StyleSheet.create({
     position: "absolute",
     bottom: 40,
     alignSelf: "center",
-    height: 60,
     width: "90%",
+    height: 70,
     backgroundColor: "#fff",
     borderRadius: 40,
     borderTopWidth: 1,
@@ -180,6 +196,11 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 8,
   },
+  navSlot: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   navItem: {
     fontSize: 14,
     fontWeight: "600",
@@ -188,9 +209,19 @@ const styles = StyleSheet.create({
   navItemActive: {
     textDecorationLine: "underline",
   },
-  navItemDisabled: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#A0A0A0",
+  plusButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "#111",
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: -2,
+  },
+  plusButtonText: {
+    color: "#fff",
+    fontSize: 20,
+    fontWeight: "700",
+    lineHeight: 22,
   },
 });
