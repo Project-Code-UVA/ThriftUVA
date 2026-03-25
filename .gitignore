@@ -42,3 +42,6 @@ app-example
 # generated native folders
 /ios
 /android
+
+# contains firebase api keys
+firebase.ts
