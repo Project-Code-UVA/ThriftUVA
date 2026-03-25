@@ -44,4 +44,4 @@ app-example
 /android
 
 # contains firebase api keys
-firebase.ts
+lib/firebase.ts
