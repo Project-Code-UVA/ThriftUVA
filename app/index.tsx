@@ -217,19 +217,4 @@ const styles = StyleSheet.create({
   navItemActive: {
     textDecorationLine: "underline",
   },
-  plusButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: "#111",
-    justifyContent: "center",
-    alignItems: "center",
-    marginTop: -2,
-  },
-  plusButtonText: {
-    color: "#fff",
-    fontSize: 20,
-    fontWeight: "700",
-    lineHeight: 22,
-  },
 });
