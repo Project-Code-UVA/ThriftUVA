@@ -1,10 +1,10 @@
 import { StyleSheet, Text, View } from "react-native";
 import BottomNav from "../components/BottomNav";
 
-export default function Profile() {
+export default function Message() {
   return (
     <View style={styles.container}>
-      <Text style={styles.text}>Profile</Text>
+      <Text style={styles.text}>Message</Text>
       <BottomNav />
     </View>
   );

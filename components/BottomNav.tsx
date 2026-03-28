@@ -2,7 +2,7 @@ import { router, usePathname } from "expo-router";
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
-type Route = "/" | "/search" | "/sell" | "/profile";
+type Route = "/" | "/cart" | "/sell" | "/message" | "/profile";
 
 type Tab = {
   label: string;
@@ -11,8 +11,9 @@ type Tab = {
 
 const TABS: Tab[] = [
   { label: "Home", href: "/" },
-  { label: "Search", href: "/search" },
+  { label: "Cart", href: "/cart" },
   { label: "Sell", href: "/sell" },
+  { label: "Message", href: "/message" },
   { label: "Profile", href: "/profile" },
 ];
 

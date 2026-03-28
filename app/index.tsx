@@ -1,7 +1,7 @@
 import { router, usePathname } from "expo-router";
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 
-type Route = "/" | "/search" | "/sell" | "/profile";
+type Route = "/" | "/cart" | "/sell" | "/message" | "/profile";
 
 export default function Index() {
   const pathname = usePathname();
@@ -70,22 +70,30 @@ export default function Index() {
         <TouchableOpacity
           style={styles.navSlot}
           activeOpacity={0.8}
-          onPress={() => goTab("/search")}
+          onPress={() => goTab("/cart")}
         >
-          <Text style={[styles.navItem, pathname === "/search" && styles.navItemActive]}>
-            Search
+          <Text style={[styles.navItem, pathname === "/cart" && styles.navItemActive]}>
+            Cart
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.plusButton} activeOpacity={0.9}>
-          <Text style={styles.plusButtonText}>
-            +
-            </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.navSlot} activeOpacity={0.8} onPress={() => goTab("/sell")}>
+        <TouchableOpacity 
+          style={styles.navSlot} 
+          activeOpacity={0.8} 
+          onPress={() => goTab("/sell")}
+        >
           <Text style={[styles.navItem, pathname === "/sell" && styles.navItemActive]}>
             Sell
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={styles.navSlot} 
+          activeOpacity={0.8} 
+          onPress={() => goTab("/message")}
+        >
+          <Text style={[styles.navItem, pathname === "/message" && styles.navItemActive]}>
+            Message
           </Text>
         </TouchableOpacity>
 

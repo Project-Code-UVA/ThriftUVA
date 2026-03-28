@@ -1,10 +1,10 @@
 import { StyleSheet, Text, View } from "react-native";
 import BottomNav from "../components/BottomNav";
 
-export default function Search() {
+export default function Sell() {
   return (
     <View style={styles.container}>
-      <Text style={styles.text}>Search</Text>
+      <Text style={styles.text}>Sell</Text>
       <BottomNav />
     </View>
   );
