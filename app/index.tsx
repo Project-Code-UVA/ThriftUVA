@@ -1,7 +1,7 @@
 import { router, usePathname } from "expo-router";
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 
-type Route = "/" | "/cart" | "/sell" | "/message" | "/profile";
+type Route = "/" | "/cart" | "/sell" | "/message" | "/profile" | "/upload";
 
 export default function Index() {
   const pathname = usePathname();
@@ -106,6 +106,16 @@ export default function Index() {
             Profile
           </Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.navSlot}
+          activeOpacity={0.8}
+          onPress={() => goTab("/upload")}
+        >
+          <Text style={[styles.navItem, pathname === "/upload" && styles.navItemActive]}>
+            Upload
+          </Text>
+        </TouchableOpacity>        
       </View>
     </View>
   );

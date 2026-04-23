@@ -2,7 +2,7 @@ import { router, usePathname } from "expo-router";
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
-type Route = "/" | "/cart" | "/sell" | "/message" | "/profile";
+type Route = "/" | "/cart" | "/sell" | "/message" | "/profile" | "/upload";
 
 type Tab = {
   label: string;
@@ -15,6 +15,7 @@ const TABS: Tab[] = [
   { label: "Sell", href: "/sell" },
   { label: "Message", href: "/message" },
   { label: "Profile", href: "/profile" },
+  { label: "Upload", href: "/upload" },
 ];
 
 export default function BottomNav() {
