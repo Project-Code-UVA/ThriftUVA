@@ -1,102 +1,148 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { httpsCallable } from "firebase/functions";
+import {
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { functions } from "../../firebaseConfig";
 
-import { HelloWave } from '@/components/hello-wave';
-import { SignOutButton } from '@/components/sign-out-button';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+export default function BuyingPage() {
+  const pickupOptions = [
+    {
+      id: "1",
+      location: "Newcomb Hall",
+      time: "Mon, 3:00 PM - 3:30 PM",
+    },
+    {
+      id: "2",
+      location: "Clemons Library",
+      time: "Tue, 5:00 PM - 5:30 PM",
+    },
+    {
+      id: "3",
+      location: "Rice Hall",
+      time: "Wed, 1:00 PM - 1:30 PM",
+    },
+  ];
 
-export default function HomeScreen() {
+  const handleRequest = async () => {
+    try {
+      const createPurchaseRequest = httpsCallable(
+        functions,
+        "createPurchaseRequest",
+      );
+
+      const res = await createPurchaseRequest({
+        itemId: "demo-item-id",
+        proposedMeetup: {
+          locationId: "newcomb",
+          startTime: new Date().toISOString(),
+          endTime: new Date().toISOString(),
+        },
+      });
+
+      console.log("SUCCESS:", res.data);
+    } catch (err) {
+      console.error("ERROR:", err);
+    }
+  };
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <SignOutButton />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+    <ScrollView contentContainerStyle={styles.container}>
+      <Text style={styles.header}>Buying Page</Text>
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+      <View style={styles.card}>
+        <Text style={styles.itemTitle}>Grey Hoodie</Text>
+        <Text style={styles.price}>$25</Text>
+        <Text style={styles.detail}>Seller: Alex Johnson</Text>
+        <Text style={styles.detail}>Brand: Nike</Text>
+        <Text style={styles.detail}>Usage Duration: 6 months</Text>
+        <Text style={styles.detail}>Purchase Platform: ThriftUVA</Text>
+        <Text style={styles.detail}>
+          Description: Lightly used hoodie in good condition.
+        </Text>
+      </View>
+
+      <Text style={styles.sectionTitle}>Pickup Options</Text>
+
+      {pickupOptions.map((option) => (
+        <View key={option.id} style={styles.optionCard}>
+          <Text style={styles.optionLocation}>{option.location}</Text>
+          <Text style={styles.optionTime}>{option.time}</Text>
+        </View>
+      ))}
+
+      <TouchableOpacity style={styles.button} onPress={handleRequest}>
+        <Text style={styles.buttonText}>Request Purchase</Text>
+      </TouchableOpacity>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  container: {
+    padding: 20,
+    backgroundColor: "#ffffff",
   },
-  stepContainer: {
-    gap: 8,
+  header: {
+    fontSize: 30,
+    fontWeight: "700",
+    marginBottom: 20,
+    marginTop: 20,
+  },
+  card: {
+    backgroundColor: "#f3f3f3",
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 24,
+  },
+  itemTitle: {
+    fontSize: 24,
+    fontWeight: "700",
     marginBottom: 8,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  price: {
+    fontSize: 20,
+    fontWeight: "600",
+    marginBottom: 12,
+  },
+  detail: {
+    fontSize: 15,
+    marginBottom: 6,
+  },
+  sectionTitle: {
+    fontSize: 22,
+    fontWeight: "700",
+    marginBottom: 12,
+  },
+  optionCard: {
+    borderWidth: 1,
+    borderColor: "#d0d0d0",
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 12,
+  },
+  optionLocation: {
+    fontSize: 17,
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+  optionTime: {
+    fontSize: 14,
+  },
+  button: {
+    backgroundColor: "#1e1e1e",
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+    marginTop: 10,
+    marginBottom: 30,
+  },
+  buttonText: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "700",
   },
 });

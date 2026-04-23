@@ -45,3 +45,4 @@ app-example
 
 # contains firebase api keys
 lib/firebase.ts
+firebase.ts
