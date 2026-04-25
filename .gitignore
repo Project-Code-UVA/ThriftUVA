@@ -31,6 +31,7 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
 .env*.local
 .env
 
@@ -43,5 +44,6 @@ app-example
 /ios
 /android
 
-# contains api key
+# contains firebase api keys
+lib/firebase.ts
 firebase.ts
