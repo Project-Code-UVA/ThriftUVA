@@ -90,6 +90,26 @@ export default function ProductDetail() {
   ]
     .filter(Boolean)
     .map((t: string) => t.replace("#", ""));
+  
+  const addToCart = async () => {
+    const fakeUserId = "0123456789";
+
+    const { error } = await supabase.from("cart_items").insert({
+      user_id: fakeUserId,
+      listing_id: listing.id,
+    });
+
+    if (error) {
+      if (error.code === "23505") {
+        alert("This item is already in your cart.");
+      } else {
+        alert(error.message);
+      }
+      return;
+    }
+
+    alert("Added to cart!");
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -163,7 +183,11 @@ export default function ProductDetail() {
             <Text style={styles.secondaryBtnText}>Message seller</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.primaryBtn} activeOpacity={0.9}>
+          <TouchableOpacity
+            style={styles.primaryBtn}
+            activeOpacity={0.9}
+            onPress={addToCart}
+          >
             <Text style={styles.primaryBtnText}>Add to cart</Text>
           </TouchableOpacity>
 
