@@ -401,8 +401,8 @@ const styles = StyleSheet.create({
   },
   responsiveWrapper: { width: "100%", maxWidth: 500, paddingHorizontal: 20 },
   headerText: {
-    fontSize: 42,
-    fontWeight: "300",
+    fontSize: 45,
+    fontWeight: "bold",
     textAlign: "center",
     marginBottom: 20,
   },
