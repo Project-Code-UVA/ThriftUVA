@@ -14,6 +14,11 @@ import {
 import BottomNav from "../components/BottomNav";
 import { supabase } from "../lib/supabase";
 
+import {
+  KeyboardAvoidingView,
+  Platform,
+} from "react-native";
+
 export default function Upload() {
   const [price, setPrice] = useState("");
   const [description, setDescription] = useState("");
@@ -39,6 +44,22 @@ export default function Upload() {
     "#oversized", "#fitted", "#hoodie", "#jacket", "#coat", "#dress", "#skirt", "#jeans",
     "#shorts", "#tshirt", "#blouse", "#sweater", "#activewear", "#basicallynew", "#gentlyUsed",
   ];
+
+  /* enum categories for clothing type */
+  const categoryOptions = [
+    "tops",
+    "bottoms",
+    "dresses",
+    "outerwear",
+    "shoes",
+    "accessories",
+    "activewear",
+    "formal",
+    "vintage",
+    "other",
+  ];
+
+  const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
 
   const filteredTags = useMemo(() => {
     return availableTags.filter(
@@ -81,15 +102,19 @@ export default function Upload() {
     try {
       setUploading(true);
 
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
+      // const {
+      //   data: { user },
+      //   error: userError,
+      // } = await supabase.auth.getUser();
 
-      if (userError || !user) {
-        Alert.alert("Error", "You must be logged in to upload an item.");
-        return;
-      }
+      // if (userError || !user) {
+      //   Alert.alert("Error", "You must be logged in to upload an item.");
+      //   return;
+      // }
+
+      const user = {
+        id: "0123456789",
+      };
 
       if (!itemName.trim() || !price.trim()) {
         Alert.alert("Missing fields", "Please enter an outfit name and price.");
@@ -154,10 +179,15 @@ export default function Upload() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
       >
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
         <View style={styles.responsiveWrapper}>
           <Text style={styles.headerText}>THRIFT UVA</Text>
 
@@ -171,7 +201,16 @@ export default function Upload() {
             {images.length > 0 && (
               <View style={styles.previewRow}>
                 {images.map((uri) => (
-                  <Image key={uri} source={{ uri }} style={styles.previewImage} />
+                  <View key={uri} style={styles.previewWrapper}>
+                    <Image source={{ uri }} style={styles.previewImage} />
+
+                    <TouchableOpacity
+                      style={styles.removeImageButton}
+                      onPress={() => setImages(images.filter((image) => image !== uri))}
+                    >
+                      <Text style={styles.removeImageText}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
                 ))}
               </View>
             )}
@@ -200,7 +239,7 @@ export default function Upload() {
               />
             </View>
 
-            <View style={[styles.formGroup, { flex: 1 }]}>
+            {/* <View style={[styles.formGroup, { flex: 1 }]}>
               <Text style={styles.label}>Type</Text>
               <TextInput
                 style={styles.input}
@@ -209,6 +248,41 @@ export default function Upload() {
                 onChangeText={setClothingType}
                 placeholderTextColor="#999"
               />
+            </View> */}
+            <View style={[styles.formGroup, { flex: 1 }]}>
+              <Text style={styles.label}>Type</Text>
+
+              <TouchableOpacity
+                style={styles.input}
+                onPress={() => setCategoryDropdownOpen(!categoryDropdownOpen)}
+              >
+                <View style={styles.dropdownRow}>
+                  <Text style={{ fontSize: 16, color: clothingType ? "#000" : "#999" }}>
+                    {clothingType || "Select type"}
+                  </Text>
+
+                  <Text style={styles.dropdownIcon}>
+                    {categoryDropdownOpen ? "▲" : "▼"}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              {categoryDropdownOpen && (
+                <View style={styles.categoryDropdown}>
+                  {categoryOptions.map((category) => (
+                    <TouchableOpacity
+                      key={category}
+                      style={styles.categoryDropdownItem}
+                      onPress={() => {
+                        setClothingType(category);
+                        setCategoryDropdownOpen(false);
+                      }}
+                    >
+                      <Text style={styles.dropdownText}>{category}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
             </View>
           </View>
 
@@ -292,6 +366,7 @@ export default function Upload() {
               value={description}
               onChangeText={setDescription}
               placeholderTextColor="#999"
+              scrollEnabled={true}
             />
           </View>
 
@@ -305,7 +380,8 @@ export default function Upload() {
             </Text>
           </TouchableOpacity>
         </View>
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       <View style={styles.navWrapper}>
         <BottomNav />
@@ -412,6 +488,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     fontSize: 16,
     backgroundColor: "#fff",
+    justifyContent: "center",
   },
   textArea: { height: 100, textAlignVertical: "top", paddingTop: 12 },
 
@@ -429,4 +506,58 @@ const styles = StyleSheet.create({
     width: "100%",
     alignItems: "center",
   },
+  categoryDropdown: {
+    position: "absolute",
+    top: 55,
+    left: 0, 
+    right: 0,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#000",
+    borderRadius: 12,
+    marginTop: 5,
+    overflow: "hidden",
+    zIndex: 9999,
+    elevation: 10,
+  },
+
+  categoryDropdownItem: {
+    padding: 14,
+    borderBottomWidth: 0.5,
+    borderBottomColor: "#eee",
+  },
+  dropdownRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+
+  dropdownIcon: {
+    fontSize: 14,
+    color: "#666",
+  },
+  previewWrapper: {
+    position: "relative",
+    margin: 5,
+  },
+
+  removeImageButton: {
+    position: "absolute",
+    top: -6,
+    right: -6,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#000",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 10,
+  },
+
+  removeImageText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  
 });
