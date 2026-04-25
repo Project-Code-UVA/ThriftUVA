@@ -1,92 +1,126 @@
-import { router, usePathname } from "expo-router";
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { router } from "expo-router";
+import { useEffect, useState } from "react";
+import {
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import BottomNav from "../components/BottomNav";
+import { supabase } from "../lib/supabase";
 
-type Route = "/" | "/sell" | "/message" | "/profile";
+const categories = [
+  "tops",
+  "bottoms",
+  "dresses",
+  "outerwear",
+  "shoes",
+  "accessories",
+  "activewear",
+  "formal",
+  "vintage",
+  "other",
+];
 
 export default function Index() {
-  const pathname = usePathname();
+  const [listings, setListings] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState("");
 
-  const goTab = (href: Route) => {
-    if (pathname !== href) {
-      router.replace(href);
+  useEffect(() => {
+    fetchListings();
+  }, []);
+
+  const fetchListings = async () => {
+    setLoading(true);
+    setErrorMessage("");
+
+    console.log("SUPABASE URL:", process.env.EXPO_PUBLIC_SUPABASE_URL);
+
+    const { data, error, count } = await supabase
+      .from("listings")
+      .select("*", { count: "exact" });
+
+    console.log("LISTINGS COUNT:", count);
+
+    if (error) {
+      setErrorMessage(error.message);
+      setListings([]);
+    } else {
+      setListings(data || []);
     }
+
+    setLoading(false);
   };
+
+  const groupedListings = categories.map((category) => ({
+    category,
+    items: listings.filter((item) => item.category === category),
+  }));
 
   return (
     <View style={styles.container}>
       <Text style={styles.logo}>THRIFT UVA</Text>
 
       <View style={styles.row}>
-        <TextInput
-          style={styles.search}
-          placeholder="Search…"
-          placeholderTextColor="#888"
-        />
-
-        <TouchableOpacity style={styles.filterButton} activeOpacity={0.8}>
+        <TextInput style={styles.search} placeholder="Search" />
+        <TouchableOpacity style={styles.filterButton}>
           <Text style={styles.plusText}>+</Text>
         </TouchableOpacity>
       </View>
 
-      <Text style={styles.sectionTitle}>Recommended</Text>
+      <ScrollView contentContainerStyle={{ paddingBottom: 120 }}>
+        {loading && (
+          <Text style={styles.emptyText}>Loading listings...</Text>
+        )}
 
-      <View style={styles.sectionRow}>
-        {Array.from({ length: 3 }).map((_, i) => (
-          <TouchableOpacity
-            key={`rec-${i}`}
-            style={styles.item}
-            activeOpacity={0.85}
-            onPress={() => router.push("/product_detail")}
-          >
-            <View style={styles.placeholder} />
-            <Text style={styles.itemTitle}>Item {i + 1}</Text>
-            <Text style={styles.itemPrice}>$0.00</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+        {!loading && errorMessage !== "" && (
+          <Text style={styles.emptyText}>Error: {errorMessage}</Text>
+        )}
 
-      <Text style={styles.sectionTitle}>New</Text>
+        {!loading && !errorMessage && listings.length === 0 && (
+          <Text style={styles.emptyText}>No listings found yet.</Text>
+        )}
+        {groupedListings.map(({ category, items }) => {
+          if (items.length === 0) return null;
 
-      <View style={styles.sectionRow}>
-        {Array.from({ length: 3 }).map((_, i) => (
-          <TouchableOpacity
-            key={`new-${i}`}
-            style={styles.item}
-            activeOpacity={0.85}
-            onPress={() => router.push("/product_detail")}
-          >
-            <View style={styles.placeholder} />
-            <Text style={styles.itemTitle}>Item {i + 1}</Text>
-            <Text style={styles.itemPrice}>$0.00</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+          return (
+            <View key={category} style={{ marginBottom: 30 }}>
+              <Text style={styles.sectionTitle}>{category.toUpperCase()}</Text>
 
-      <View style={styles.bottomNav}>
-        <TouchableOpacity activeOpacity={0.8} onPress={() => goTab("/")}>
-          <Text style={[styles.navItem, pathname === "/" && styles.navItemActive]}>
-            Home
-          </Text>
-        </TouchableOpacity>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                {items.map((item) => (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={styles.itemCard}
+                    onPress={() =>
+                      router.push({
+                        pathname: "/product_detail",
+                        params: { id: item.id },
+                      })
+                    }
+                  >
+                    {item.images?.[0] ? (
+                      <Image source={{ uri: item.images[0] }} style={styles.itemImage} />
+                    ) : (
+                      <View style={styles.placeholder} />
+                    )}
 
-        <TouchableOpacity activeOpacity={0.8} onPress={() => goTab("/sell")}>
-          <Text style={[styles.navItem, pathname === "/sell" && styles.navItemActive]}>
-            Search
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity activeOpacity={0.8} onPress={() => goTab("/message")}>
-          <Text style={[styles.navItem, pathname === "/message" && styles.navItemActive]}>
-            Sell
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity activeOpacity={0.8} onPress={() => goTab("/profile")}>
-          <Text style={[styles.navItem, pathname === "/profile" && styles.navItemActive]}>
-            Profile
-          </Text>
-        </TouchableOpacity>
-      </View>
+                    <Text style={styles.itemTitle} numberOfLines={1}>
+                      {item.title}
+                    </Text>
+                    <Text style={styles.itemPrice}>${item.price}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          );
+        })}
+      </ScrollView>
+      <BottomNav />
     </View>
   );
 }
@@ -190,5 +224,23 @@ const styles = StyleSheet.create({
   },
   navItemActive: {
     textDecorationLine: "underline",
+  },
+  itemCard: {
+    width: 100,
+    marginRight: 24,
+  },
+
+  itemImage: {
+    width: 100,
+    height: 150,
+    borderRadius: 8,
+    marginBottom: 8,
+    backgroundColor: "#e5e5e5",
+  },
+  emptyText: {
+    textAlign: "center",
+    marginTop: 40,
+    fontSize: 16,
+    color: "#777",
   },
 });

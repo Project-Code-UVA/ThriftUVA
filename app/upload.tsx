@@ -154,8 +154,9 @@ export default function Upload() {
         description: description.trim(),
         price: Number(price),
         size: size.trim(),
-        category: clothingType.trim() || null,
+        category: clothingType || null,
         images: uploadedImageUrls,
+        tags: selectedTags.map((tag) => tag.replace("#", "")),
         status: "active",
       });
 

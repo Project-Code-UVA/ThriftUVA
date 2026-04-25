@@ -27,9 +27,10 @@ export default function RootLayout() {
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="index" />
         <Stack.Screen name="login" />
+        <Stack.Screen name="clothing_catalog" />
+        <Stack.Screen name="cart" />
         <Stack.Screen name="upload" />
         <Stack.Screen name="profile" />
-        <Stack.Screen name="sell" />
       </Stack>
       <StatusBar style="auto" />
     </>

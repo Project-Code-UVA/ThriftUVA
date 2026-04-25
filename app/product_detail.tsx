@@ -1,6 +1,7 @@
-import { router } from "expo-router";
-import React from "react";
+import { router, useLocalSearchParams } from "expo-router";
+import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Dimensions,
   Image,
   SafeAreaView,
@@ -10,23 +11,101 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { supabase } from "../lib/supabase";
 
 const { width } = Dimensions.get("window");
-
-const TAGS = ["Top", "Blue", "Denim"];
+const IMAGE_HEIGHT = Math.round(width * 1.25);
 
 export default function ProductDetail() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const [listing, setListing] = useState<any>(null);
+  const [seller, setSeller] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+
+  useEffect(() => {
+    if (id) fetchProductDetail();
+  }, [id]);
+
+  const fetchProductDetail = async () => {
+    setLoading(true);
+
+    const { data, error } = await supabase
+      .from("listings")
+      .select(
+        `
+        *,
+        users:seller_id (
+          id,
+          display_name,
+          avatar_url,
+          uva_email
+        )
+      `
+      )
+      .eq("id", id)
+      .single();
+
+    if (error) {
+      console.log("Product detail error:", error);
+      setListing(null);
+      setSeller(null);
+    } else {
+      setListing(data);
+      setSeller(data.users);
+    }
+
+    setLoading(false);
+  };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.center}>
+        <ActivityIndicator size="large" />
+        <Text style={{ marginTop: 10 }}>Loading product...</Text>
+      </SafeAreaView>
+    );
+  }
+
+  if (!listing) {
+    return (
+      <SafeAreaView style={styles.center}>
+        <Text>Product not found.</Text>
+        <TouchableOpacity onPress={() => router.back()} style={styles.secondaryBtn}>
+          <Text style={styles.secondaryBtnText}>Go back</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
+  const images = listing.images || [];
+  const currentImage = images[activeImageIndex];
+
+  const tags = [
+    listing.category,
+    listing.condition,
+    listing.size,
+    listing.brand,
+    ...(listing.tags || []),
+  ]
+    .filter(Boolean)
+    .map((t: string) => t.replace("#", ""));
+
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
         <View style={styles.imageWrap}>
-          <Image
-            source={{
-              uri: "https://i.pinimg.com/736x/e5/ab/8a/e5ab8a5ec0a3f608e047f6b4f7a71974.jpg",
-            }}
-            style={styles.heroImage}
-            resizeMode="cover"
-          />
+          {currentImage ? (
+            <Image
+              source={{ uri: currentImage }}
+              style={styles.heroImage}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={styles.imagePlaceholder}>
+              <Text style={styles.placeholderText}>No image</Text>
+            </View>
+          )}
 
           <TouchableOpacity
             style={styles.backBtn}
@@ -35,28 +114,49 @@ export default function ProductDetail() {
           >
             <Text style={styles.backChevron}>‹</Text>
           </TouchableOpacity>
+
+          {images.length > 1 && (
+            <View style={styles.imageDots}>
+              {images.map((_: string, index: number) => (
+                <TouchableOpacity
+                  key={index}
+                  onPress={() => setActiveImageIndex(index)}
+                  style={[
+                    styles.dot,
+                    activeImageIndex === index && styles.activeDot,
+                  ]}
+                />
+              ))}
+            </View>
+          )}
         </View>
 
         <View style={styles.sheet}>
-          <Text style={styles.title}>Cute Top</Text>
-          <Text style={styles.price}>$20.20</Text>
+          <Text style={styles.title}>{listing.title}</Text>
+          <Text style={styles.price}>${Number(listing.price).toFixed(2)}</Text>
 
           <View style={styles.sellerRow}>
-            <View style={styles.avatarCircle} />
-            <Text style={styles.sellerName}>Seller Name</Text>
+            {seller?.avatar_url ? (
+              <Image source={{ uri: seller.avatar_url }} style={styles.avatarImage} />
+            ) : (
+              <View style={styles.avatarCircle} />
+            )}
+
+            <Text style={styles.sellerName}>
+              {seller?.display_name || seller?.uva_email || "Unknown Seller"}
+            </Text>
           </View>
 
           <View style={styles.tagsRow}>
-            {TAGS.map((t) => (
-              <View key={t} style={styles.tagPill}>
-                <Text style={styles.tagText}>{t}</Text>
+            {tags.map((tag) => (
+              <View key={tag} style={styles.tagPill}>
+                <Text style={styles.tagText}>{String(tag)}</Text>
               </View>
             ))}
           </View>
 
           <Text style={styles.desc}>
-            Cute blue denim top. Lightly worn and sized at a medium. Comfortable
-            material and true to size. Owned for 1 year.
+            {listing.description || "No description provided."}
           </Text>
 
           <TouchableOpacity style={styles.secondaryBtn} activeOpacity={0.85}>
@@ -74,12 +174,18 @@ export default function ProductDetail() {
   );
 }
 
-const IMAGE_HEIGHT = Math.round(width * 1.25);
-
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#FFFFFF" },
   container: { flex: 1 },
   content: { paddingBottom: 24 },
+
+  center: {
+    flex: 1,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 20,
+  },
 
   imageWrap: {
     width: "100%",
@@ -87,6 +193,18 @@ const styles = StyleSheet.create({
     backgroundColor: "#EEE",
   },
   heroImage: { width: "100%", height: "100%" },
+
+  imagePlaceholder: {
+    width: "100%",
+    height: "100%",
+    backgroundColor: "#EEE",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  placeholderText: {
+    color: "#777",
+    fontWeight: "600",
+  },
 
   backBtn: {
     position: "absolute",
@@ -104,6 +222,24 @@ const styles = StyleSheet.create({
     lineHeight: 28,
     marginTop: -2,
     color: "#111",
+  },
+
+  imageDots: {
+    position: "absolute",
+    bottom: 55,
+    alignSelf: "center",
+    flexDirection: "row",
+    gap: 8,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "rgba(255,255,255,0.65)",
+  },
+  activeDot: {
+    width: 18,
+    backgroundColor: "#FFFFFF",
   },
 
   sheet: {
@@ -130,6 +266,12 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   avatarCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#F3F4F6",
+  },
+  avatarImage: {
     width: 28,
     height: 28,
     borderRadius: 14,
@@ -167,6 +309,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#FFFFFF",
+    paddingHorizontal: 20,
   },
   secondaryBtnText: { fontSize: 15, fontWeight: "700", color: "#111" },
 
