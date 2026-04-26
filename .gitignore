@@ -43,6 +43,5 @@ app-example
 /ios
 /android
 
-# contains firebase api keys
-lib/firebase.ts
-firebase.ts
+# contains supabase/service keys — never commit
+lib/supabase.secret.ts

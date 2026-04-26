@@ -1,148 +1,242 @@
-import { httpsCallable } from "firebase/functions";
+import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
+import { useEffect, useState } from "react";
 import {
+  Dimensions,
+  FlatList,
+  Image,
+  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
-import { functions } from "../../firebaseConfig";
+import { useSupabaseClient } from "../../lib/supabase";
 
-export default function BuyingPage() {
-  const pickupOptions = [
-    {
-      id: "1",
-      location: "Newcomb Hall",
-      time: "Mon, 3:00 PM - 3:30 PM",
-    },
-    {
-      id: "2",
-      location: "Clemons Library",
-      time: "Tue, 5:00 PM - 5:30 PM",
-    },
-    {
-      id: "3",
-      location: "Rice Hall",
-      time: "Wed, 1:00 PM - 1:30 PM",
-    },
-  ];
+const { width } = Dimensions.get("window");
+const CARD_WIDTH = (width - 16 * 2 - 10) / 2;
 
-  const handleRequest = async () => {
-    try {
-      const createPurchaseRequest = httpsCallable(
-        functions,
-        "createPurchaseRequest",
-      );
+const CATEGORIES = ["All", "Tops", "Bottoms", "Dresses", "Outerwear", "Shoes", "Accessories"];
 
-      const res = await createPurchaseRequest({
-        itemId: "demo-item-id",
-        proposedMeetup: {
-          locationId: "newcomb",
-          startTime: new Date().toISOString(),
-          endTime: new Date().toISOString(),
-        },
-      });
+type Listing = {
+  id: string;
+  title: string;
+  price: number;
+  seller_id: string;
+  size: string | null;
+  images: string[];
+  category: string | null;
+};
 
-      console.log("SUCCESS:", res.data);
-    } catch (err) {
-      console.error("ERROR:", err);
+export default function HomeScreen() {
+  const supabase = useSupabaseClient();
+  const [listings, setListings] = useState<Listing[]>([]);
+  const [activeCategory, setActiveCategory] = useState("All");
+
+  useEffect(() => {
+    fetchListings();
+  }, [activeCategory]);
+
+  const fetchListings = async () => {
+    let query = supabase
+      .from("listings")
+      .select("id, title, price, seller_id, size, images, category")
+      .eq("status", "active")
+      .order("created_at", { ascending: false });
+
+    if (activeCategory !== "All") {
+      query = query.eq("category", activeCategory.toLowerCase());
     }
+
+    const { data, error } = await query;
+    if (error) console.error("[listings] fetch error:", error.message, error.details);
+    setListings(data || []);
   };
 
-  return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.header}>Buying Page</Text>
+  const renderCard = ({ item }: { item: Listing }) => (
+    <TouchableOpacity
+      style={styles.card}
+      activeOpacity={0.85}
+      onPress={() => router.push({ pathname: "/product_detail", params: { id: item.id } })}
+    >
+      <View style={styles.cardImageWrap}>
+        {item.images?.[0] ? (
+          <Image source={{ uri: item.images[0] }} style={styles.cardImage} resizeMode="cover" />
+        ) : (
+          <View style={styles.cardImagePlaceholder} />
+        )}
+        {item.size && (
+          <View style={styles.sizeBadge}>
+            <Text style={styles.sizeBadgeText}>{item.size}</Text>
+          </View>
+        )}
+      </View>
+      <View style={styles.cardBody}>
+        <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
+        <View style={styles.cardFooter}>
+          <Text style={styles.cardPrice}>${item.price}</Text>
+          <Text style={styles.cardSeller}>@wahoo</Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
 
-      <View style={styles.card}>
-        <Text style={styles.itemTitle}>Grey Hoodie</Text>
-        <Text style={styles.price}>$25</Text>
-        <Text style={styles.detail}>Seller: Alex Johnson</Text>
-        <Text style={styles.detail}>Brand: Nike</Text>
-        <Text style={styles.detail}>Usage Duration: 6 months</Text>
-        <Text style={styles.detail}>Purchase Platform: ThriftUVA</Text>
-        <Text style={styles.detail}>
-          Description: Lightly used hoodie in good condition.
+  return (
+    <SafeAreaView style={styles.safe}>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.logo}>
+          {"Thrift".split("").map((char, i) => (
+            <Text key={i} style={styles.logoThrift}>{char}</Text>
+          ))}
+          <Text style={styles.logoUVA}>UVA</Text>
         </Text>
+        <TouchableOpacity style={styles.iconBtn}>
+          <Ionicons name="notifications-outline" size={22} color="#232D4B" />
+        </TouchableOpacity>
       </View>
 
-      <Text style={styles.sectionTitle}>Pickup Options</Text>
-
-      {pickupOptions.map((option) => (
-        <View key={option.id} style={styles.optionCard}>
-          <Text style={styles.optionLocation}>{option.location}</Text>
-          <Text style={styles.optionTime}>{option.time}</Text>
+      {/* Search bar (tap to navigate) */}
+      <TouchableOpacity
+        style={styles.searchBar}
+        activeOpacity={0.8}
+        onPress={() => router.push("/(tabs)/search")}
+      >
+        <Ionicons name="search-outline" size={18} color="#9CA3AF" />
+        <Text style={styles.searchPlaceholder}>Search wahoos for fits...</Text>
+        <View style={styles.filterBtn}>
+          <Ionicons name="options-outline" size={16} color="#fff" />
         </View>
-      ))}
-
-      <TouchableOpacity style={styles.button} onPress={handleRequest}>
-        <Text style={styles.buttonText}>Request Purchase</Text>
       </TouchableOpacity>
-    </ScrollView>
+
+      {/* Category chips */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.categoryScroll}
+      >
+        {CATEGORIES.map((cat) => (
+          <TouchableOpacity
+            key={cat}
+            style={[styles.chip, activeCategory === cat && styles.chipActive]}
+            onPress={() => setActiveCategory(cat)}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.chipText, activeCategory === cat && styles.chipTextActive]}>
+              {cat}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+
+      {/* Listing grid */}
+      <FlatList
+        data={listings}
+        keyExtractor={(item) => item.id}
+        renderItem={renderCard}
+        numColumns={2}
+        columnWrapperStyle={styles.row}
+        contentContainerStyle={styles.grid}
+        showsVerticalScrollIndicator={false}
+        ListEmptyComponent={
+          <View style={styles.empty}>
+            <Ionicons name="shirt-outline" size={40} color="#D1D5DB" />
+            <Text style={styles.emptyText}>No listings yet</Text>
+          </View>
+        }
+      />
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    padding: 20,
-    backgroundColor: "#ffffff",
-  },
+  safe: { flex: 1, backgroundColor: "#fff" },
+
   header: {
-    fontSize: 30,
-    fontWeight: "700",
-    marginBottom: 20,
-    marginTop: 20,
-  },
-  card: {
-    backgroundColor: "#f3f3f3",
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 24,
-  },
-  itemTitle: {
-    fontSize: 24,
-    fontWeight: "700",
-    marginBottom: 8,
-  },
-  price: {
-    fontSize: 20,
-    fontWeight: "600",
-    marginBottom: 12,
-  },
-  detail: {
-    fontSize: 15,
-    marginBottom: 6,
-  },
-  sectionTitle: {
-    fontSize: 22,
-    fontWeight: "700",
-    marginBottom: 12,
-  },
-  optionCard: {
-    borderWidth: 1,
-    borderColor: "#d0d0d0",
-    borderRadius: 10,
-    padding: 14,
-    marginBottom: 12,
-  },
-  optionLocation: {
-    fontSize: 17,
-    fontWeight: "600",
-    marginBottom: 4,
-  },
-  optionTime: {
-    fontSize: 14,
-  },
-  button: {
-    backgroundColor: "#1e1e1e",
-    paddingVertical: 14,
-    borderRadius: 12,
+    flexDirection: "row",
     alignItems: "center",
-    marginTop: 10,
-    marginBottom: 30,
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 8,
   },
-  buttonText: {
-    color: "#ffffff",
-    fontSize: 16,
-    fontWeight: "700",
+  logo: { fontSize: 26, fontWeight: "800" },
+  logoThrift: { color: "#232D4B" },
+  logoUVA: { color: "#E57200" },
+  iconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#F3F4F6",
+    alignItems: "center",
+    justifyContent: "center",
   },
+
+  searchBar: {
+    marginHorizontal: 16,
+    marginBottom: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F3F4F6",
+    borderRadius: 24,
+    paddingLeft: 14,
+    paddingRight: 6,
+    paddingVertical: 9,
+    gap: 8,
+  },
+  searchPlaceholder: { flex: 1, fontSize: 14, color: "#9CA3AF" },
+  filterBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "#232D4B",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  categoryScroll: { paddingHorizontal: 16, gap: 8, paddingBottom: 12 },
+  chip: {
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    backgroundColor: "#fff",
+  },
+  chipActive: { backgroundColor: "#232D4B", borderColor: "#232D4B" },
+  chipText: { fontSize: 13, fontWeight: "600", color: "#374151" },
+  chipTextActive: { color: "#fff" },
+
+  grid: { paddingHorizontal: 16, paddingBottom: 20 },
+  row: { justifyContent: "space-between", marginBottom: 10 },
+
+  card: { width: CARD_WIDTH, borderRadius: 12, backgroundColor: "#fff" },
+  cardImageWrap: {
+    width: "100%",
+    aspectRatio: 0.85,
+    borderRadius: 12,
+    overflow: "hidden",
+    position: "relative",
+  },
+  cardImagePlaceholder: { flex: 1, backgroundColor: "#F5EEE6" },
+  cardImage: { width: "100%", height: "100%" },
+  sizeBadge: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    backgroundColor: "rgba(255,255,255,0.95)",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  sizeBadgeText: { fontSize: 11, fontWeight: "700", color: "#111" },
+  cardBody: { paddingTop: 8, paddingHorizontal: 2 },
+  cardTitle: { fontSize: 13, fontWeight: "700", color: "#111", marginBottom: 3 },
+  cardFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  cardPrice: { fontSize: 14, fontWeight: "700", color: "#111" },
+  cardSeller: { fontSize: 11, color: "#9CA3AF" },
+
+  empty: { alignItems: "center", paddingTop: 60, gap: 10 },
+  emptyText: { fontSize: 15, color: "#9CA3AF", fontWeight: "500" },
 });
