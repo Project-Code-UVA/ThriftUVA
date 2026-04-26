@@ -315,7 +315,7 @@ app.post('/api/connect/accounts', async (req, res) => {
       });
     }
 
-    const { data: existingUsers, error: existingUserError } = await supabaseAdmin
+    let { data: existingUsers, error: existingUserError } = await supabaseAdmin
       .from('users')
       .select('id')
       .eq('id', appUserId)
@@ -324,9 +324,33 @@ app.post('/api/connect/accounts', async (req, res) => {
       throw new Error(helpfulSchemaError(existingUserError, 'Failed to validate user before account creation.'));
     }
     if (!existingUsers?.length) {
-      return res.status(404).json({
-        error: `User ${appUserId} does not exist in users table.`,
-      });
+      // Self-heal: if user row is missing, create it so account mapping can be saved.
+      const { error: upsertUserError } = await supabaseAdmin
+        .from('users')
+        .upsert(
+          {
+            id: appUserId,
+            uva_email: contactEmail,
+            display_name: displayName || null,
+          },
+          { onConflict: 'id' }
+        );
+
+      if (upsertUserError) {
+        throw new Error(
+          helpfulSchemaError(
+            upsertUserError,
+            `User ${appUserId} was missing and could not be auto-created.`
+          )
+        );
+      }
+
+      const lookup = await supabaseAdmin
+        .from('users')
+        .select('id')
+        .eq('id', appUserId)
+        .limit(1);
+      existingUsers = lookup.data || [];
     }
 
     const account = await stripeClient.v2.core.accounts.create({

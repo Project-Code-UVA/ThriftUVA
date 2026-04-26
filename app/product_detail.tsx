@@ -96,16 +96,35 @@ export default function ProductDetail() {
   const handleMessage = async () => {
     if (!user) { Alert.alert("Sign in required", "Please sign in to message sellers."); return; }
     if (!listing) return;
-    const { error } = await supabase.from("messages").insert({
-      sender_id: user.id,
-      receiver_id: listing.seller_id,
-      listing_id: listing.id,
-      content: `Hi! I'm interested in your listing: ${listing.title}`,
-    });
-    if (!error) {
-      Alert.alert("Message sent!", "The seller will reply soon.");
-      router.push("/(tabs)/messages");
+    const { data: existingThreadMessages } = await supabase
+      .from("messages")
+      .select("id")
+      .eq("listing_id", listing.id)
+      .in("sender_id", [user.id, listing.seller_id])
+      .in("receiver_id", [user.id, listing.seller_id])
+      .limit(1);
+
+    // Seed first message only when thread is empty.
+    if (!existingThreadMessages?.length) {
+      const { error } = await supabase.from("messages").insert({
+        sender_id: user.id,
+        receiver_id: listing.seller_id,
+        listing_id: listing.id,
+        content: `Hi! I'm interested in your listing: ${listing.title}`,
+      });
+      if (error) {
+        Alert.alert("Message failed", "Could not start conversation right now.");
+        return;
+      }
     }
+
+    router.push({
+      pathname: "/conversation",
+      params: {
+        partnerId: listing.seller_id,
+        listingId: listing.id,
+      },
+    });
   };
 
   /**

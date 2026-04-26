@@ -7,6 +7,7 @@ import {
   Dimensions,
   Image,
   Linking,
+  Platform,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -141,7 +142,20 @@ export default function ProfileScreen() {
 
       const onboardingUrl = await createUserOnboardingLink(user.id);
       setPaymentStatus("onboarding_incomplete");
-      await Linking.openURL(onboardingUrl);
+      if (!onboardingUrl?.startsWith("http")) {
+        throw new Error("Onboarding link is invalid. Please try again.");
+      }
+
+      if (Platform.OS === "web") {
+        // Web fallback to avoid popup blockers in some environments.
+        window.open(onboardingUrl, "_self");
+      } else {
+        const canOpen = await Linking.canOpenURL(onboardingUrl);
+        if (!canOpen) {
+          throw new Error("Could not open Stripe onboarding link on this device.");
+        }
+        await Linking.openURL(onboardingUrl);
+      }
     } catch (error: any) {
       Alert.alert("Payments setup unavailable", error?.message || "Could not start onboarding.");
     } finally {

@@ -1,8 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useUser } from "@clerk/expo";
+import * as ImagePicker from "expo-image-picker";
 import { useMemo, useState } from "react";
 import {
   Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
@@ -50,6 +52,7 @@ export default function SellScreen() {
   const [tagQuery, setTagQuery] = useState("");
   const [showTagDropdown, setShowTagDropdown] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [selectedImageUris, setSelectedImageUris] = useState<string[]>([]);
 
   const filteredTags = useMemo(() =>
     AVAILABLE_TAGS.filter(
@@ -66,6 +69,72 @@ export default function SellScreen() {
 
   const removeTag = (tag: string) => {
     setSelectedTags((prev) => prev.filter((t) => t !== tag));
+  };
+
+  /**
+   * Lets the seller pick up to 6 images from their library.
+   */
+  const handlePickImages = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert("Permission needed", "Please allow photo access to upload item images.");
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsMultipleSelection: true,
+      quality: 0.8,
+      selectionLimit: 6,
+    });
+
+    if (result.canceled) return;
+
+    const uris = result.assets.map((asset) => asset.uri).filter(Boolean);
+    setSelectedImageUris((prev) => [...new Set([...prev, ...uris])].slice(0, 6));
+  };
+
+  const removeImage = (uri: string) => {
+    setSelectedImageUris((prev) => prev.filter((item) => item !== uri));
+  };
+
+  /**
+   * Uploads selected local images to Supabase Storage and returns public URLs.
+   * If upload fails, we throw and caller decides whether to continue listing creation.
+   */
+  const uploadListingImages = async (listingId: string) => {
+    if (!user || selectedImageUris.length === 0) return [];
+
+    const uploadedUrls: string[] = [];
+
+    for (let index = 0; index < selectedImageUris.length; index += 1) {
+      const uri = selectedImageUris[index];
+      const response = await fetch(uri);
+      const blob = await response.blob();
+      const filename = `${Date.now()}-${index}.jpg`;
+      const objectPath = `${user.id}/${listingId}/${filename}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("listing-images")
+        .upload(objectPath, blob, {
+          contentType: "image/jpeg",
+          upsert: false,
+        });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      const { data: publicUrlData } = supabase.storage
+        .from("listing-images")
+        .getPublicUrl(objectPath);
+
+      if (publicUrlData?.publicUrl) {
+        uploadedUrls.push(publicUrlData.publicUrl);
+      }
+    }
+
+    return uploadedUrls;
   };
 
   const handleSubmit = async () => {
@@ -101,6 +170,27 @@ export default function SellScreen() {
       console.error(error);
     } else {
       let paymentSetupPending = false;
+      let imageUploadPending = false;
+
+      // Best-effort image upload. Listing creation still succeeds if uploads fail.
+      if (insertedListing?.id && selectedImageUris.length > 0) {
+        try {
+          const uploadedImageUrls = await uploadListingImages(insertedListing.id);
+          if (uploadedImageUrls.length > 0) {
+            const { error: updateImagesError } = await supabase
+              .from("listings")
+              .update({ images: uploadedImageUrls })
+              .eq("id", insertedListing.id);
+            if (updateImagesError) {
+              imageUploadPending = true;
+              console.warn("[listing-images] Listing created but image URL save failed:", updateImagesError);
+            }
+          }
+        } catch (imageError) {
+          imageUploadPending = true;
+          console.warn("[listing-images] Listing created but image upload failed:", imageError);
+        }
+      }
 
       // Best-effort Stripe product sync for the listing.
       // If the sample server is not configured, listing creation still succeeds.
@@ -112,14 +202,19 @@ export default function SellScreen() {
           console.warn("[stripe-sync] Listing created but Stripe sync request failed:", syncError);
         }
       }
-      if (paymentSetupPending) {
+      if (paymentSetupPending && imageUploadPending) {
+        Alert.alert("Listed!", "Listing created, but payment and image setup are still pending.");
+      } else if (paymentSetupPending) {
         Alert.alert("Listed!", "Listing created, but payment setup is still pending.");
+      } else if (imageUploadPending) {
+        Alert.alert("Listed!", "Listing created, but image upload is still pending.");
       } else {
         Alert.alert("Listed!", "Your item is now live.");
       }
       setTitle(""); setPrice(""); setDescription(""); setBrand("");
       setSelectedSize(""); setSelectedCategory(""); setSelectedCondition("");
       setSelectedTags([]);
+      setSelectedImageUris([]);
     }
     setSubmitting(false);
   };
@@ -139,11 +234,34 @@ export default function SellScreen() {
           <Text style={styles.header}>List an Item</Text>
 
           {/* Photo upload placeholder */}
-          <TouchableOpacity style={styles.photoBox} activeOpacity={0.8}>
+          <TouchableOpacity style={styles.photoBox} activeOpacity={0.8} onPress={handlePickImages}>
             <Ionicons name="camera-outline" size={32} color="#9CA3AF" />
-            <Text style={styles.photoLabel}>Add Photos</Text>
-            <Text style={styles.photoSub}>Tap to select from your library</Text>
+            <Text style={styles.photoLabel}>
+              {selectedImageUris.length > 0 ? "Edit Photos" : "Add Photos"}
+            </Text>
+            <Text style={styles.photoSub}>Tap to select up to 6 images</Text>
           </TouchableOpacity>
+
+          {selectedImageUris.length > 0 && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.previewRow}
+            >
+              {selectedImageUris.map((uri) => (
+                <View key={uri} style={styles.previewWrap}>
+                  <Image source={{ uri }} style={styles.previewImage} />
+                  <TouchableOpacity
+                    style={styles.removePreviewBtn}
+                    onPress={() => removeImage(uri)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="close" size={12} color="#fff" />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </ScrollView>
+          )}
 
           {/* Title */}
           <View style={styles.field}>
@@ -334,6 +452,30 @@ const styles = StyleSheet.create({
   },
   photoLabel: { fontSize: 15, fontWeight: "700", color: "#374151" },
   photoSub: { fontSize: 12, color: "#9CA3AF" },
+  previewRow: { gap: 10, marginBottom: 20 },
+  previewWrap: {
+    position: "relative",
+    width: 96,
+    height: 120,
+    borderRadius: 12,
+    overflow: "hidden",
+  },
+  previewImage: {
+    width: "100%",
+    height: "100%",
+    backgroundColor: "#F3F4F6",
+  },
+  removePreviewBtn: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: "rgba(17,17,17,0.8)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
 
   row: { flexDirection: "row", gap: 12 },
   field: { marginBottom: 20 },
