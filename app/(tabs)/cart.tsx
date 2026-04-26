@@ -5,12 +5,14 @@ import {
   Alert,
   FlatList,
   Image,
+  Linking,
   SafeAreaView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { createCheckoutSession } from "../../lib/stripeApi";
 import { useSupabaseClient } from "../../lib/supabase";
 
 type CartItem = {
@@ -22,14 +24,25 @@ type CartItem = {
     images: string[];
     size: string | null;
     seller_id: string;
+    stripe_price_id: string | null;
   };
 };
+
+type SellerPaymentMap = Record<
+  string,
+  {
+    hasAccount: boolean;
+    readyToReceivePayments: boolean;
+  }
+>;
 
 export default function CartScreen() {
   const supabase = useSupabaseClient();
   const { user } = useUser();
   const [items, setItems] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [sellerPayments, setSellerPayments] = useState<SellerPaymentMap>({});
+  const [checkoutLoadingCartItemId, setCheckoutLoadingCartItemId] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) fetchCart();
@@ -39,9 +52,29 @@ export default function CartScreen() {
     if (!user) return;
     const { data } = await supabase
       .from("cart_items")
-      .select("id, listing:listing_id(id, title, price, images, size, seller_id)")
+      .select("id, listing:listing_id(id, title, price, images, size, seller_id, stripe_price_id)")
       .eq("user_id", user.id);
-    setItems((data as CartItem[]) || []);
+    const cartItems = (data as CartItem[]) || [];
+    setItems(cartItems);
+
+    const sellerIds = [...new Set(cartItems.map((item) => item.listing?.seller_id).filter(Boolean))];
+    if (sellerIds.length > 0) {
+      const { data: sellers } = await supabase
+        .from("users")
+        .select("id, stripe_account_id, stripe_ready_to_receive_payments")
+        .in("id", sellerIds);
+
+      const nextMap: SellerPaymentMap = {};
+      (sellers || []).forEach((seller: any) => {
+        nextMap[seller.id] = {
+          hasAccount: Boolean(seller.stripe_account_id),
+          readyToReceivePayments: Boolean(seller.stripe_ready_to_receive_payments),
+        };
+      });
+      setSellerPayments(nextMap);
+    } else {
+      setSellerPayments({});
+    }
     setLoading(false);
   };
 
@@ -50,8 +83,36 @@ export default function CartScreen() {
     setItems((prev) => prev.filter((i) => i.id !== cartItemId));
   };
 
-  const handleCheckout = () => {
-    Alert.alert("Checkout", "Payment flow coming soon!");
+  /**
+   * Checkout one cart item at a time by creating hosted Stripe Checkout.
+   */
+  const handleCheckoutItem = async (item: CartItem) => {
+    if (!user) {
+      Alert.alert("Sign in required", "Please sign in to continue checkout.");
+      return;
+    }
+
+    const listing = item.listing;
+    if (!listing) return;
+    const sellerStatus = sellerPayments[listing.seller_id];
+    if (!sellerStatus?.hasAccount || !sellerStatus?.readyToReceivePayments) {
+      Alert.alert("Seller has not enabled payments yet");
+      return;
+    }
+    if (!listing.stripe_price_id) {
+      Alert.alert("Payment setup pending");
+      return;
+    }
+
+    setCheckoutLoadingCartItemId(item.id);
+    try {
+      const checkoutUrl = await createCheckoutSession(listing.id, user.id);
+      await Linking.openURL(checkoutUrl);
+    } catch (error: any) {
+      Alert.alert("Checkout unavailable", error?.message || "Could not start checkout.");
+    } finally {
+      setCheckoutLoadingCartItemId(null);
+    }
   };
 
   const total = items.reduce((sum, item) => sum + (item.listing?.price || 0), 0);
@@ -72,6 +133,19 @@ export default function CartScreen() {
           <Text style={styles.itemTitle} numberOfLines={2}>{listing.title}</Text>
           {listing.size && <Text style={styles.itemSize}>Size: {listing.size}</Text>}
           <Text style={styles.itemPrice}>${listing.price}</Text>
+          <TouchableOpacity
+            style={[
+              styles.inlineCheckoutBtn,
+              checkoutLoadingCartItemId === item.id && styles.inlineCheckoutBtnDisabled,
+            ]}
+            onPress={() => handleCheckoutItem(item)}
+            disabled={checkoutLoadingCartItemId === item.id}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.inlineCheckoutBtnText}>
+              {checkoutLoadingCartItemId === item.id ? "Starting..." : "Buy now"}
+            </Text>
+          </TouchableOpacity>
         </View>
         <TouchableOpacity
           style={styles.removeBtn}
@@ -119,8 +193,16 @@ export default function CartScreen() {
               <Text style={styles.totalLabel}>Total</Text>
               <Text style={styles.totalAmount}>${total.toFixed(2)}</Text>
             </View>
-            <TouchableOpacity style={styles.checkoutBtn} onPress={handleCheckout} activeOpacity={0.85}>
-              <Text style={styles.checkoutBtnText}>Checkout</Text>
+            <TouchableOpacity
+              style={[
+                styles.checkoutBtn,
+                (!items.length || checkoutLoadingCartItemId !== null) && styles.checkoutBtnDisabled,
+              ]}
+              onPress={() => items[0] && handleCheckoutItem(items[0])}
+              activeOpacity={0.85}
+              disabled={!items.length || checkoutLoadingCartItemId !== null}
+            >
+              <Text style={styles.checkoutBtnText}>Checkout first item</Text>
               <Ionicons name="arrow-forward" size={18} color="#fff" />
             </TouchableOpacity>
           </View>
@@ -166,6 +248,16 @@ const styles = StyleSheet.create({
   itemTitle: { fontSize: 14, fontWeight: "700", color: "#111", marginBottom: 4, lineHeight: 20 },
   itemSize: { fontSize: 12, color: "#9CA3AF", marginBottom: 6 },
   itemPrice: { fontSize: 16, fontWeight: "800", color: "#111" },
+  inlineCheckoutBtn: {
+    marginTop: 8,
+    alignSelf: "flex-start",
+    backgroundColor: "#232D4B",
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  inlineCheckoutBtnDisabled: { backgroundColor: "#9CA3AF" },
+  inlineCheckoutBtnText: { color: "#fff", fontSize: 12, fontWeight: "700" },
   removeBtn: { padding: 6 },
 
   separator: { height: 1, backgroundColor: "#F3F4F6", marginLeft: 16 },
@@ -200,6 +292,7 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 4,
   },
+  checkoutBtnDisabled: { backgroundColor: "#9CA3AF", shadowOpacity: 0, elevation: 0 },
   checkoutBtnText: { fontSize: 16, fontWeight: "800", color: "#fff" },
 
   centered: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10 },

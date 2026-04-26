@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ThriftUVA Stripe Connect Demo</title>
+    <style>
+      :root {
+        --uva-blue: #232d4b;
+        --uva-orange: #e57200;
+        --bg: #f8fafc;
+        --muted: #6b7a90;
+        --border: #d9e2ec;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        background: var(--bg);
+        color: var(--uva-blue);
+      }
+
+      .shell {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 24px;
+      }
+
+      .hero {
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        padding: 24px;
+        margin-bottom: 20px;
+      }
+
+      .eyebrow {
+        color: var(--uva-orange);
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        font-size: 12px;
+      }
+
+      h1 {
+        margin: 8px 0 6px;
+      }
+
+      .subtle {
+        color: var(--muted);
+        margin: 0;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: 16px;
+      }
+
+      .card {
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        padding: 18px;
+      }
+
+      .card h2 {
+        margin: 0 0 12px;
+        font-size: 18px;
+      }
+
+      label {
+        display: block;
+        font-size: 13px;
+        color: var(--muted);
+        margin: 10px 0 6px;
+      }
+
+      input,
+      textarea,
+      button,
+      select {
+        width: 100%;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        font: inherit;
+      }
+
+      input,
+      textarea,
+      select {
+        padding: 10px 12px;
+      }
+
+      button {
+        margin-top: 10px;
+        cursor: pointer;
+        padding: 11px 12px;
+        border: 0;
+        background: var(--uva-blue);
+        color: #fff;
+        font-weight: 700;
+      }
+
+      button.secondary {
+        background: #fff;
+        color: var(--uva-blue);
+        border: 1px solid var(--border);
+      }
+
+      button.orange {
+        background: var(--uva-orange);
+      }
+
+      .inline-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+
+      .status-box {
+        margin-top: 10px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 10px;
+        background: #fff;
+        color: var(--muted);
+        font-size: 13px;
+        white-space: pre-wrap;
+      }
+
+      .products {
+        margin-top: 12px;
+        display: grid;
+        gap: 10px;
+      }
+
+      .product-card {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 12px;
+        background: #fff;
+      }
+
+      .product-title {
+        margin: 0 0 6px;
+        font-size: 16px;
+      }
+
+      .product-meta {
+        color: var(--muted);
+        margin: 2px 0;
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <section class="hero">
+        <p class="eyebrow">UVA MARKETPLACE</p>
+        <h1>ThriftUVA Stripe Connect Demo</h1>
+        <p class="subtle">
+          Create connected accounts, onboard sellers, create products, and run destination-charge checkout.
+        </p>
+      </section>
+
+      <div class="grid">
+        <section class="card">
+          <h2>1) Create Connected Account</h2>
+          <label for="appUserId">Seller User ID (users.id in Supabase)</label>
+          <input id="appUserId" placeholder="user_123" />
+
+          <label for="displayName">Display Name</label>
+          <input id="displayName" placeholder="Seller Name" />
+
+          <label for="contactEmail">Contact Email</label>
+          <input id="contactEmail" placeholder="seller@example.com" />
+
+          <button id="createAccountBtn">Create Connected Account</button>
+          <div id="accountCreateResult" class="status-box"></div>
+
+          <button class="orange" id="onboardBtn">Onboard to collect payments</button>
+          <button class="secondary" id="refreshStatusBtn">Refresh onboarding status</button>
+          <div id="accountStatusResult" class="status-box"></div>
+        </section>
+
+        <section class="card">
+          <h2>2) Create Product/Price for Listing</h2>
+          <label for="listingIdForProduct">Listing ID (listings.id in Supabase)</label>
+          <input id="listingIdForProduct" placeholder="uuid-listing-id" />
+          <button id="createProductBtn">Create Stripe Product + Price for Listing</button>
+          <div id="createProductResult" class="status-box"></div>
+        </section>
+      </div>
+
+      <section class="card" style="margin-top: 16px">
+        <h2>3) Storefront (All Products)</h2>
+        <p class="subtle">
+          Buy buttons create hosted Checkout Sessions with destination charges + application fees.
+        </p>
+        <label for="buyerUserId">Buyer User ID (users.id in Supabase)</label>
+        <input id="buyerUserId" placeholder="buyer-user-id" />
+        <button class="secondary" id="refreshProductsBtn">Refresh Products</button>
+        <div id="productsContainer" class="products"></div>
+      </section>
+    </div>
+
+    <script>
+      const accountCreateResult = document.getElementById('accountCreateResult');
+      const accountStatusResult = document.getElementById('accountStatusResult');
+      const createProductResult = document.getElementById('createProductResult');
+      const productsContainer = document.getElementById('productsContainer');
+
+      function writeBox(node, payload) {
+        node.textContent =
+          typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2);
+      }
+
+      async function postJson(url, body) {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || 'Request failed.');
+        }
+        return data;
+      }
+
+      document.getElementById('createAccountBtn').addEventListener('click', async () => {
+        try {
+          const appUserId = document.getElementById('appUserId').value.trim();
+          const displayName = document.getElementById('displayName').value.trim();
+          const contactEmail = document.getElementById('contactEmail').value.trim();
+
+          const data = await postJson('/api/connect/accounts', {
+            appUserId,
+            displayName,
+            contactEmail,
+          });
+
+          writeBox(accountCreateResult, data);
+        } catch (err) {
+          writeBox(accountCreateResult, err.message);
+        }
+      });
+
+      document.getElementById('onboardBtn').addEventListener('click', async () => {
+        try {
+          const userId = document.getElementById('appUserId').value.trim();
+          const data = await postJson(`/api/connect/users/${userId}/onboarding-link`, {});
+          window.location.href = data.url;
+        } catch (err) {
+          writeBox(accountStatusResult, err.message);
+        }
+      });
+
+      document.getElementById('refreshStatusBtn').addEventListener('click', async () => {
+        try {
+          const userId = document.getElementById('appUserId').value.trim();
+          const res = await fetch(`/api/connect/users/${userId}/status`);
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Failed to load account status.');
+          writeBox(accountStatusResult, data);
+        } catch (err) {
+          writeBox(accountStatusResult, err.message);
+        }
+      });
+
+      document.getElementById('createProductBtn').addEventListener('click', async () => {
+        try {
+          const body = {
+            listingId: document.getElementById('listingIdForProduct').value.trim(),
+          };
+          const data = await postJson('/api/products', body);
+          writeBox(createProductResult, data);
+          await loadProducts();
+        } catch (err) {
+          writeBox(createProductResult, err.message);
+        }
+      });
+
+      async function startCheckout(productId) {
+        try {
+          const buyerUserId = document.getElementById('buyerUserId').value.trim();
+          if (!buyerUserId) {
+            throw new Error('Please provide buyer user id before checkout.');
+          }
+          const data = await postJson('/api/checkout/session', {
+            listingId: productId,
+            buyerUserId,
+            quantity: 1,
+          });
+          if (data.url) {
+            window.location.href = data.url;
+            return;
+          }
+          throw new Error('Checkout session did not return a URL.');
+        } catch (err) {
+          alert(err.message);
+        }
+      }
+
+      async function loadProducts() {
+        productsContainer.innerHTML = '<p class="subtle">Loading products...</p>';
+        try {
+          const res = await fetch('/api/products');
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Failed to load products.');
+
+          if (!data.products.length) {
+            productsContainer.innerHTML = '<p class="subtle">No products yet.</p>';
+            return;
+          }
+
+          productsContainer.innerHTML = '';
+          data.products.forEach((product) => {
+            const card = document.createElement('div');
+            card.className = 'product-card';
+
+            const displayAmount =
+              typeof product.unitAmount === 'number'
+                ? `${(product.unitAmount / 100).toFixed(2)} ${String(product.currency || '').toUpperCase()}`
+                : 'N/A';
+
+            card.innerHTML = `
+              <h3 class="product-title">${product.name || 'Untitled product'}</h3>
+              <p class="product-meta">${product.description || ''}</p>
+              <p class="product-meta"><strong>Price:</strong> ${displayAmount}</p>
+              <p class="product-meta"><strong>Listing ID:</strong> ${product.listingId || product.id}</p>
+              <p class="product-meta"><strong>Stripe Price:</strong> ${product.stripePriceId || 'Not created yet'}</p>
+              <button>Buy now</button>
+            `;
+
+            const btn = card.querySelector('button');
+            if (product.stripePriceId) {
+              btn.addEventListener('click', () => startCheckout(product.listingId || product.id));
+            } else {
+              btn.classList.add('secondary');
+              btn.textContent = 'Create Stripe product first';
+              btn.addEventListener('click', async () => {
+                try {
+                  const data = await postJson('/api/products', {
+                    listingId: product.listingId || product.id,
+                  });
+                  writeBox(createProductResult, data);
+                  await loadProducts();
+                } catch (err) {
+                  alert(err.message);
+                }
+              });
+            }
+
+            productsContainer.appendChild(card);
+          });
+        } catch (err) {
+          productsContainer.innerHTML = `<p class="subtle">${err.message}</p>`;
+        }
+      }
+
+      document.getElementById('refreshProductsBtn').addEventListener('click', loadProducts);
+
+      loadProducts();
+    </script>
+  </body>
+</html>

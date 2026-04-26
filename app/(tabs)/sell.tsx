@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { syncListingStripeProduct } from "../../lib/stripeApi";
 import { useSupabaseClient } from "../../lib/supabase";
 
 const AVAILABLE_TAGS = [
@@ -34,7 +35,6 @@ const CONDITIONS = [
   { label: "Good", value: "good" },
   { label: "Fair", value: "fair" },
 ];
-
 export default function SellScreen() {
   const supabase = useSupabaseClient();
   const { user } = useUser();
@@ -79,24 +79,44 @@ export default function SellScreen() {
     }
 
     setSubmitting(true);
-    const { error } = await supabase.from("listings").insert({
-      seller_id: user.id,
-      title: title.trim(),
-      price: parseFloat(price),
-      description: description.trim() || null,
-      brand: brand.trim() || null,
-      size: selectedSize || null,
-      category: selectedCategory.toLowerCase(),
-      condition: selectedCondition,
-      tags: selectedTags,
-      images: [],
-    });
+    const { data: insertedListing, error } = await supabase
+      .from("listings")
+      .insert({
+        seller_id: user.id,
+        title: title.trim(),
+        price: parseFloat(price),
+        description: description.trim() || null,
+        brand: brand.trim() || null,
+        size: selectedSize || null,
+        category: selectedCategory.toLowerCase(),
+        condition: selectedCondition,
+        tags: selectedTags,
+        images: [],
+      })
+      .select("id")
+      .single();
 
     if (error) {
       Alert.alert("Error", "Could not create listing. Please try again.");
       console.error(error);
     } else {
-      Alert.alert("Listed!", "Your item is now live.");
+      let paymentSetupPending = false;
+
+      // Best-effort Stripe product sync for the listing.
+      // If the sample server is not configured, listing creation still succeeds.
+      if (insertedListing?.id) {
+        try {
+          await syncListingStripeProduct(insertedListing.id);
+        } catch (syncError) {
+          paymentSetupPending = true;
+          console.warn("[stripe-sync] Listing created but Stripe sync request failed:", syncError);
+        }
+      }
+      if (paymentSetupPending) {
+        Alert.alert("Listed!", "Listing created, but payment setup is still pending.");
+      } else {
+        Alert.alert("Listed!", "Your item is now live.");
+      }
       setTitle(""); setPrice(""); setDescription(""); setBrand("");
       setSelectedSize(""); setSelectedCategory(""); setSelectedCondition("");
       setSelectedTags([]);

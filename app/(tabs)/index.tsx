@@ -2,22 +2,24 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import {
-  Dimensions,
   FlatList,
   Image,
+  Platform,
   SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { useSupabaseClient } from "../../lib/supabase";
 
-const { width } = Dimensions.get("window");
-const CARD_WIDTH = (width - 16 * 2 - 10) / 2;
-
 const CATEGORIES = ["All", "Tops", "Bottoms", "Dresses", "Outerwear", "Shoes", "Accessories"];
+const HORIZONTAL_PADDING = 16;
+const GRID_GAP = 12;
+const TAB_BAR_SAFE_PADDING = 110;
+const MAX_GRID_WIDTH = 560;
 
 type Listing = {
   id: string;
@@ -30,9 +32,16 @@ type Listing = {
 };
 
 export default function HomeScreen() {
+  const { width } = useWindowDimensions();
   const supabase = useSupabaseClient();
   const [listings, setListings] = useState<Listing[]>([]);
   const [activeCategory, setActiveCategory] = useState("All");
+  const isNarrowPhone = width < 420;
+  const numColumns = isNarrowPhone ? 1 : 2;
+  const availableGridWidth = Math.min(width - HORIZONTAL_PADDING * 2, MAX_GRID_WIDTH);
+  const cardWidth =
+    numColumns === 1 ? availableGridWidth : (availableGridWidth - GRID_GAP) / numColumns;
+  const cardAspectRatio = Platform.OS === "web" ? 0.9 : 0.86;
 
   useEffect(() => {
     fetchListings();
@@ -56,11 +65,11 @@ export default function HomeScreen() {
 
   const renderCard = ({ item }: { item: Listing }) => (
     <TouchableOpacity
-      style={styles.card}
+      style={[styles.card, { width: cardWidth }]}
       activeOpacity={0.85}
       onPress={() => router.push({ pathname: "/product_detail", params: { id: item.id } })}
     >
-      <View style={styles.cardImageWrap}>
+      <View style={[styles.cardImageWrap, { aspectRatio: cardAspectRatio }]}>
         {item.images?.[0] ? (
           <Image source={{ uri: item.images[0] }} style={styles.cardImage} resizeMode="cover" />
         ) : (
@@ -82,9 +91,8 @@ export default function HomeScreen() {
     </TouchableOpacity>
   );
 
-  return (
-    <SafeAreaView style={styles.safe}>
-      {/* Header */}
+  const header = (
+    <>
       <View style={styles.header}>
         <Text style={styles.logo}>
           {"Thrift".split("").map((char, i) => (
@@ -97,7 +105,6 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Search bar (tap to navigate) */}
       <TouchableOpacity
         style={styles.searchBar}
         activeOpacity={0.8}
@@ -110,7 +117,6 @@ export default function HomeScreen() {
         </View>
       </TouchableOpacity>
 
-      {/* Category chips */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -129,15 +135,20 @@ export default function HomeScreen() {
           </TouchableOpacity>
         ))}
       </ScrollView>
+    </>
+  );
 
-      {/* Listing grid */}
+  return (
+    <SafeAreaView style={styles.safe}>
       <FlatList
+        key={`home-grid-${numColumns}`}
         data={listings}
         keyExtractor={(item) => item.id}
         renderItem={renderCard}
-        numColumns={2}
-        columnWrapperStyle={styles.row}
-        contentContainerStyle={styles.grid}
+        numColumns={numColumns}
+        ListHeaderComponent={header}
+        columnWrapperStyle={numColumns > 1 ? styles.row : undefined}
+        contentContainerStyle={[styles.grid, { paddingBottom: TAB_BAR_SAFE_PADDING }]}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={styles.empty}>
@@ -157,7 +168,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
+    paddingHorizontal: HORIZONTAL_PADDING,
     paddingTop: 12,
     paddingBottom: 8,
   },
@@ -174,7 +185,7 @@ const styles = StyleSheet.create({
   },
 
   searchBar: {
-    marginHorizontal: 16,
+    marginHorizontal: HORIZONTAL_PADDING,
     marginBottom: 12,
     flexDirection: "row",
     alignItems: "center",
@@ -195,7 +206,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  categoryScroll: { paddingHorizontal: 16, gap: 8, paddingBottom: 12 },
+  categoryScroll: { paddingHorizontal: HORIZONTAL_PADDING, gap: 8, paddingBottom: 16 },
   chip: {
     paddingHorizontal: 16,
     paddingVertical: 7,
@@ -208,13 +219,17 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 13, fontWeight: "600", color: "#374151" },
   chipTextActive: { color: "#fff" },
 
-  grid: { paddingHorizontal: 16, paddingBottom: 20 },
-  row: { justifyContent: "space-between", marginBottom: 10 },
+  grid: {
+    paddingHorizontal: HORIZONTAL_PADDING,
+    alignSelf: "center",
+    width: "100%",
+    maxWidth: MAX_GRID_WIDTH + HORIZONTAL_PADDING * 2,
+  },
+  row: { justifyContent: "space-between", marginBottom: GRID_GAP },
 
-  card: { width: CARD_WIDTH, borderRadius: 12, backgroundColor: "#fff" },
+  card: { borderRadius: 12, backgroundColor: "#fff", marginBottom: GRID_GAP },
   cardImageWrap: {
     width: "100%",
-    aspectRatio: 0.85,
     borderRadius: 12,
     overflow: "hidden",
     position: "relative",

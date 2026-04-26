@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Payment Success • ThriftUVA</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        background: #f8fafc;
+        color: #232d4b;
+      }
+      .shell {
+        max-width: 720px;
+        margin: 40px auto;
+        padding: 0 16px;
+      }
+      .card {
+        background: #fff;
+        border: 1px solid #d9e2ec;
+        border-radius: 18px;
+        padding: 20px;
+      }
+      h1 {
+        margin-top: 0;
+      }
+      .muted {
+        color: #6b7a90;
+      }
+      pre {
+        overflow: auto;
+        background: #f8fafc;
+        border: 1px solid #d9e2ec;
+        border-radius: 10px;
+        padding: 10px;
+      }
+      a.button {
+        display: inline-block;
+        margin-top: 12px;
+        background: #232d4b;
+        color: #fff;
+        text-decoration: none;
+        border-radius: 10px;
+        padding: 10px 14px;
+        font-weight: 700;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <div class="card">
+        <h1>Payment complete</h1>
+        <p class="muted">Thanks for your purchase. Session details:</p>
+        <pre id="output">Loading session...</pre>
+        <a class="button" href="/">Back to demo</a>
+      </div>
+    </div>
+    <script>
+      const output = document.getElementById('output');
+      const sessionId = new URLSearchParams(window.location.search).get('session_id');
+
+      async function loadSession() {
+        if (!sessionId) {
+          output.textContent = 'No session_id found in the URL.';
+          return;
+        }
+        const res = await fetch(`/api/checkout/session/${encodeURIComponent(sessionId)}`);
+        const data = await res.json();
+        if (!res.ok) {
+          output.textContent = data.error || 'Failed to fetch session.';
+          return;
+        }
+        output.textContent = JSON.stringify(data.session, null, 2);
+      }
+      loadSession();
+    </script>
+  </body>
+</html>

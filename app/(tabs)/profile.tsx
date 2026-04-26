@@ -2,9 +2,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuth, useUser } from "@clerk/expo";
 import { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   Dimensions,
-  FlatList,
   Image,
+  Linking,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -13,6 +15,11 @@ import {
   View,
 } from "react-native";
 import { router } from "expo-router";
+import {
+  createConnectedAccountForUser,
+  createUserOnboardingLink,
+  getUserPaymentStatus,
+} from "../../lib/stripeApi";
 import { useSupabaseClient } from "../../lib/supabase";
 
 const { width } = Dimensions.get("window");
@@ -26,6 +33,11 @@ type Listing = {
   status: string;
 };
 
+type PaymentStatus =
+  | "not_connected"
+  | "onboarding_incomplete"
+  | "ready_to_receive_payments";
+
 const TABS = ["Active", "Sold", "Purchases"];
 
 export default function ProfileScreen() {
@@ -36,9 +48,15 @@ export default function ProfileScreen() {
   const [myListings, setMyListings] = useState<Listing[]>([]);
   const [soldListings, setSoldListings] = useState<Listing[]>([]);
   const [purchases, setPurchases] = useState<Listing[]>([]);
+  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("not_connected");
+  const [stripeAccountId, setStripeAccountId] = useState<string | null>(null);
+  const [paymentsLoading, setPaymentsLoading] = useState(false);
 
   useEffect(() => {
-    if (user) fetchData();
+    if (user) {
+      fetchData();
+      refreshPaymentStatus();
+    }
   }, [user]);
 
   const fetchData = async () => {
@@ -65,6 +83,85 @@ export default function ProfileScreen() {
     setSoldListings(soldRes.data || []);
     setPurchases((purchaseRes.data || []).map((t: any) => t.listing).filter(Boolean));
   };
+
+  /**
+   * Reads seller payment status from backend + Stripe account API.
+   */
+  const refreshPaymentStatus = async () => {
+    if (!user) return;
+    setPaymentsLoading(true);
+    try {
+      const statusPayload = await getUserPaymentStatus(user.id);
+      setStripeAccountId(statusPayload?.stripeAccountId || null);
+      if (!statusPayload?.stripeAccountId) {
+        setPaymentStatus("not_connected");
+      } else if (statusPayload?.readyToReceivePayments) {
+        setPaymentStatus("ready_to_receive_payments");
+      } else {
+        setPaymentStatus("onboarding_incomplete");
+      }
+    } catch (error: any) {
+      const msg = error?.message || "";
+      if (msg.includes("does not have stripe_account_id") || msg.includes("404")) {
+        setStripeAccountId(null);
+        setPaymentStatus("not_connected");
+      } else {
+        Alert.alert("Payments status unavailable", msg || "Could not refresh payments status.");
+      }
+    } finally {
+      setPaymentsLoading(false);
+    }
+  };
+
+  /**
+   * Creates connected account when needed and opens onboarding link.
+   */
+  const handleSetUpPayments = async () => {
+    if (!user) {
+      Alert.alert("Sign in required", "Please sign in to set up seller payments.");
+      return;
+    }
+
+    const contactEmail = user.primaryEmailAddress?.emailAddress;
+    if (!contactEmail) {
+      Alert.alert("Email required", "Add a primary email in your account before onboarding payments.");
+      return;
+    }
+
+    setPaymentsLoading(true);
+    try {
+      if (!stripeAccountId) {
+        const created = await createConnectedAccountForUser({
+          appUserId: user.id,
+          displayName: user.fullName || user.username || contactEmail.split("@")[0],
+          contactEmail,
+        });
+        setStripeAccountId(created?.accountId || null);
+      }
+
+      const onboardingUrl = await createUserOnboardingLink(user.id);
+      setPaymentStatus("onboarding_incomplete");
+      await Linking.openURL(onboardingUrl);
+    } catch (error: any) {
+      Alert.alert("Payments setup unavailable", error?.message || "Could not start onboarding.");
+    } finally {
+      setPaymentsLoading(false);
+    }
+  };
+
+  const paymentStatusLabel =
+    paymentStatus === "ready_to_receive_payments"
+      ? "Ready to receive payments"
+      : paymentStatus === "onboarding_incomplete"
+        ? "Onboarding incomplete"
+        : "Not connected";
+
+  const paymentStatusColor =
+    paymentStatus === "ready_to_receive_payments"
+      ? "#0F766E"
+      : paymentStatus === "onboarding_incomplete"
+        ? "#D97706"
+        : "#6B7A90";
 
   const currentData =
     activeTab === "Active" ? myListings :
@@ -145,6 +242,42 @@ export default function ProfileScreen() {
           <TouchableOpacity style={styles.editBtn} activeOpacity={0.8}>
             <Text style={styles.editBtnText}>Edit Profile</Text>
           </TouchableOpacity>
+
+          <View style={styles.paymentsCard}>
+            <Text style={styles.paymentsTitle}>Seller payments</Text>
+            <Text style={[styles.paymentsStatus, { color: paymentStatusColor }]}>
+              {paymentStatusLabel}
+            </Text>
+            {stripeAccountId ? (
+              <Text style={styles.paymentsMeta}>Account: {stripeAccountId}</Text>
+            ) : (
+              <Text style={styles.paymentsMeta}>No connected Stripe account yet.</Text>
+            )}
+
+            <View style={styles.paymentsActions}>
+              <TouchableOpacity
+                style={[styles.paymentsBtn, paymentsLoading && styles.paymentsBtnDisabled]}
+                onPress={handleSetUpPayments}
+                activeOpacity={0.85}
+                disabled={paymentsLoading}
+              >
+                {paymentsLoading ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.paymentsBtnText}>Set up payments</Text>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.refreshBtn, paymentsLoading && styles.refreshBtnDisabled]}
+                onPress={refreshPaymentStatus}
+                activeOpacity={0.85}
+                disabled={paymentsLoading}
+              >
+                <Text style={styles.refreshBtnText}>Refresh payment status</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
 
         {/* Tab switcher */}
@@ -169,7 +302,7 @@ export default function ProfileScreen() {
           </View>
         ) : (
           <View style={styles.grid}>
-            {currentData.map((item, index) => (
+            {currentData.map((item) => (
               <View key={item.id} style={{ width: ITEM_SIZE }}>
                 {renderCard({ item })}
               </View>
@@ -231,6 +364,52 @@ const styles = StyleSheet.create({
     borderColor: "#232D4B",
   },
   editBtnText: { fontSize: 14, fontWeight: "700", color: "#232D4B" },
+  paymentsCard: {
+    marginTop: 16,
+    width: "100%",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 14,
+    padding: 14,
+    backgroundColor: "#F8FAFC",
+  },
+  paymentsTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#232D4B",
+    marginBottom: 4,
+  },
+  paymentsStatus: {
+    fontSize: 13,
+    fontWeight: "700",
+    marginBottom: 4,
+  },
+  paymentsMeta: {
+    fontSize: 12,
+    color: "#6B7A90",
+    marginBottom: 10,
+  },
+  paymentsActions: { gap: 8 },
+  paymentsBtn: {
+    backgroundColor: "#232D4B",
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+  },
+  paymentsBtnDisabled: { opacity: 0.6 },
+  paymentsBtnText: { color: "#fff", fontSize: 13, fontWeight: "700" },
+  refreshBtn: {
+    borderWidth: 1,
+    borderColor: "#D9E2EC",
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+    backgroundColor: "#fff",
+  },
+  refreshBtnDisabled: { opacity: 0.6 },
+  refreshBtnText: { color: "#232D4B", fontSize: 13, fontWeight: "700" },
 
   tabs: {
     flexDirection: "row",

@@ -6,6 +6,7 @@ import {
   Alert,
   Dimensions,
   Image,
+  Linking,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -13,6 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { createCheckoutSession, syncListingStripeProduct } from "../lib/stripeApi";
 import { useSupabaseClient } from "../lib/supabase";
 
 const { width } = Dimensions.get("window");
@@ -29,6 +31,12 @@ type Listing = {
   condition: string | null;
   images: string[];
   tags: string[];
+  stripe_price_id: string | null;
+};
+
+type SellerPaymentState = {
+  hasAccount: boolean;
+  readyToReceivePayments: boolean;
 };
 
 export default function ProductDetail() {
@@ -36,8 +44,14 @@ export default function ProductDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useUser();
   const [listing, setListing] = useState<Listing | null>(null);
+  const [sellerPaymentState, setSellerPaymentState] = useState<SellerPaymentState>({
+    hasAccount: false,
+    readyToReceivePayments: false,
+  });
   const [addingToCart, setAddingToCart] = useState(false);
   const [inCart, setInCart] = useState(false);
+  const [creatingCheckout, setCreatingCheckout] = useState(false);
+  const [syncingPaymentSetup, setSyncingPaymentSetup] = useState(false);
 
   useEffect(() => {
     if (id) fetchListing();
@@ -46,10 +60,21 @@ export default function ProductDetail() {
   const fetchListing = async () => {
     const { data } = await supabase
       .from("listings")
-      .select("id, title, price, description, seller_id, size, brand, condition, images, tags")
+      .select("id, title, price, description, seller_id, size, brand, condition, images, tags, stripe_price_id")
       .eq("id", id)
       .single();
-    if (data) setListing(data);
+    if (data) {
+      setListing(data);
+      const { data: seller } = await supabase
+        .from("users")
+        .select("stripe_account_id, stripe_ready_to_receive_payments")
+        .eq("id", data.seller_id)
+        .single();
+      setSellerPaymentState({
+        hasAccount: Boolean(seller?.stripe_account_id),
+        readyToReceivePayments: Boolean(seller?.stripe_ready_to_receive_payments),
+      });
+    }
   };
 
   const handleAddToCart = async () => {
@@ -80,6 +105,50 @@ export default function ProductDetail() {
     if (!error) {
       Alert.alert("Message sent!", "The seller will reply soon.");
       router.push("/(tabs)/messages");
+    }
+  };
+
+  /**
+   * Starts Stripe hosted checkout for this listing.
+   * Secret actions stay on the backend; client only opens returned Checkout URL.
+   */
+  const handleBuyNow = async () => {
+    if (!user) {
+      Alert.alert("Sign in required", "Please sign in to buy this item.");
+      return;
+    }
+    if (!listing) return;
+    if (!sellerPaymentState.hasAccount || !sellerPaymentState.readyToReceivePayments) {
+      Alert.alert("Seller has not enabled payments yet");
+      return;
+    }
+    if (!listing.stripe_price_id) {
+      Alert.alert("Payment setup pending");
+      return;
+    }
+
+    setCreatingCheckout(true);
+    try {
+      const checkoutUrl = await createCheckoutSession(listing.id, user.id);
+      await Linking.openURL(checkoutUrl);
+    } catch (error: any) {
+      Alert.alert("Checkout unavailable", error?.message || "Could not start checkout.");
+    } finally {
+      setCreatingCheckout(false);
+    }
+  };
+
+  const handleSyncPaymentSetup = async () => {
+    if (!user || !listing) return;
+    setSyncingPaymentSetup(true);
+    try {
+      await syncListingStripeProduct(listing.id);
+      await fetchListing();
+      Alert.alert("Payment setup ready", "Listing payment setup has been refreshed.");
+    } catch (error: any) {
+      Alert.alert("Payment setup pending", error?.message || "Could not sync listing payment setup.");
+    } finally {
+      setSyncingPaymentSetup(false);
     }
   };
 
@@ -182,6 +251,42 @@ export default function ProductDetail() {
             <Ionicons name="chatbubble-outline" size={16} color="#111" />
             <Text style={styles.secondaryBtnText}>Message seller</Text>
           </TouchableOpacity>
+
+          {(!sellerPaymentState.hasAccount || !sellerPaymentState.readyToReceivePayments) ? (
+            <View style={styles.warningPill}>
+              <Text style={styles.warningText}>Seller has not enabled payments yet</Text>
+            </View>
+          ) : !listing.stripe_price_id ? (
+            user?.id === listing.seller_id ? (
+              <TouchableOpacity
+                style={[styles.primaryBtn, syncingPaymentSetup && styles.primaryBtnDisabled]}
+                onPress={handleSyncPaymentSetup}
+                activeOpacity={0.85}
+                disabled={syncingPaymentSetup}
+              >
+                <Ionicons name="sync-outline" size={18} color="#fff" />
+                <Text style={styles.primaryBtnText}>
+                  {syncingPaymentSetup ? "Setting up..." : "Set up payment for this listing"}
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.warningPill}>
+                <Text style={styles.warningText}>Payment setup pending</Text>
+              </View>
+            )
+          ) : (
+            <TouchableOpacity
+              style={[styles.primaryBtn, creatingCheckout && styles.primaryBtnDisabled]}
+              onPress={handleBuyNow}
+              activeOpacity={0.85}
+              disabled={creatingCheckout}
+            >
+              <Ionicons name="card-outline" size={18} color="#fff" />
+              <Text style={styles.primaryBtnText}>
+                {creatingCheckout ? "Starting checkout..." : "Buy Now"}
+              </Text>
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity
             style={[styles.primaryBtn, (addingToCart || inCart) && styles.primaryBtnDisabled]}
@@ -305,6 +410,21 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   secondaryBtnText: { fontSize: 15, fontWeight: "700", color: "#111" },
+  warningPill: {
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+    backgroundColor: "#F8FAFC",
+  },
+  warningText: {
+    color: "#6B7A90",
+    fontSize: 13,
+    fontWeight: "600",
+    textAlign: "center",
+  },
 
   primaryBtn: {
     flexDirection: "row",
