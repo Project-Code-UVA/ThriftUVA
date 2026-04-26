@@ -31,6 +31,9 @@ export default function RootLayout() {
         <Stack.Screen name="cart" />
         <Stack.Screen name="upload" />
         <Stack.Screen name="profile" />
+        <Stack.Screen name="message" />
+        <Stack.Screen name="chat" />
+        <Stack.Screen name="product_detail" />
       </Stack>
       <StatusBar style="auto" />
     </>

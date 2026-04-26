@@ -179,7 +179,20 @@ export default function ProductDetail() {
             {listing.description || "No description provided."}
           </Text>
 
-          <TouchableOpacity style={styles.secondaryBtn} activeOpacity={0.85}>
+          <TouchableOpacity
+            style={styles.secondaryBtn}
+            activeOpacity={0.85}
+            onPress={() =>
+              router.push({
+                pathname: "/chat" as any,
+                params: {
+                  sellerId: listing.seller_id,
+                  listingId: listing.id,
+                  listingTitle: listing.title,
+                },
+              })
+            }
+          >
             <Text style={styles.secondaryBtnText}>Message seller</Text>
           </TouchableOpacity>
 
